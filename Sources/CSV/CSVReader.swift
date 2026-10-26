@@ -57,6 +57,7 @@ public class CSVReader {
     /// CSV header row. To set a value for this property,
     /// you set `true` to `headerRow` in initializer.
     public private(set) var headerRow: [String]?
+    internal private(set) var headerIndices: [String: Int]?
 
     public fileprivate(set) var currentRow: [String]?
 
@@ -73,6 +74,7 @@ public class CSVReader {
                 throw CSVError.cannotReadHeaderRow
             }
             self.headerRow = headerRow
+            self.headerIndices = Dictionary(headerRow.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
             self.currentRow = nil
         }
     }
@@ -373,10 +375,10 @@ extension CSVReader: IteratorProtocol {
 extension CSVReader {
 
     public subscript(key: String) -> String? {
-        guard let header = headerRow else {
+        guard let indices = headerIndices else {
             fatalError("CSVReader.headerRow must not be nil")
         }
-        guard let index = header.firstIndex(of: key) else {
+        guard let index = indices[key] else {
             return nil
         }
         guard let row = currentRow else {

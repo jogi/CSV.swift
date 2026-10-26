@@ -226,6 +226,8 @@ fileprivate final class _CSVRowDecoder: Decoder {
 
     fileprivate let headerRow: [String]?
 
+    fileprivate let headerIndices: [String: Int]?
+
     fileprivate lazy var _iso8601Formatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = .withInternetDateTime
@@ -242,10 +244,16 @@ fileprivate final class _CSVRowDecoder: Decoder {
         self.reader = reader
         self.options = options
 
-        if let headerRow = reader.headerRow {
-            self.headerRow = headerRow.map { options.keyDecodingStrategy.call($0) }
+        if case .useDefaultKeys = options.keyDecodingStrategy {
+            self.headerRow = reader.headerRow
+            self.headerIndices = reader.headerIndices
+        } else if let headerRow = reader.headerRow {
+            let mapped = headerRow.map { options.keyDecodingStrategy.call($0) }
+            self.headerRow = mapped
+            self.headerIndices = Dictionary(mapped.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         } else {
             self.headerRow = nil
+            self.headerIndices = nil
         }
     }
 
@@ -308,10 +316,7 @@ fileprivate final class CSVKeyedDecodingContainer<K: CodingKey>: KeyedDecodingCo
         if let index = key.intValue {
             return index < row.count
         } else {
-            guard let headerRow = self.decoder.headerRow else {
-                return false
-            }
-            return headerRow.contains(key.stringValue)
+            return self.decoder.headerIndices?[key.stringValue] != nil
         }
     }
 
@@ -540,10 +545,10 @@ extension _CSVRowDecoder {
     }
 
     public subscript(key: String) -> String? {
-        guard let header = headerRow else {
+        guard let indices = headerIndices else {
             fatalError("CSVReader.headerRow must not be nil")
         }
-        guard let index = header.firstIndex(of: key) else {
+        guard let index = indices[key] else {
             return nil
         }
         guard let row = reader.currentRow else {
